@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Curse Battlegrounds 3D</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#050509;color:white;font-family:Arial,sans-serif}
+canvas{display:block}
+button{font-family:inherit}
+
+#menu{
+ position:fixed;inset:0;z-index:20;
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ background:radial-gradient(circle,#321052,#080812 55%,#020204);
+}
+#menu h1{font-size:50px;margin:0 0 8px;text-shadow:0 0 25px #b52cff}
+#fighters{
+ width:90%;max-width:1100px;max-height:55vh;overflow:auto;
+ display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+ gap:10px;padding:15px
+}
+.fighter{
+ padding:14px;border:2px solid #444;border-radius:12px;
+ background:#11111b;color:white;cursor:pointer;transition:.15s
+}
+.fighter:hover{transform:translateY(-3px);border-color:#d83cff}
+.fighter.selected{border-color:#fff;box-shadow:0 0 20px #c42cff}
+#start{
+ padding:15px 45px;border:0;border-radius:12px;
+ background:#8d24d6;color:white;font-size:20px;font-weight:bold;
+ cursor:pointer
+}
+
+#hud{display:none;position:fixed;inset:0;z-index:5;pointer-events:none}
+#playerUI{position:absolute;top:15px;left:15px;width:300px}
+#enemyUI{position:absolute;top:15px;right:15px;width:300px;text-align:right}
+.label{font-weight:bold;margin:4px}
+.bar{height:20px;background:#222;border:2px solid #555;border-radius:20px;overflow:hidden}
+.fill{height:100%;transition:.15s}
+#hp{background:#26df6c;width:100%}
+#energy{background:#a72cff;width:0}
+#enemyHP{background:#e52b4b;width:100%}
+
+#abilities{
+ position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+ display:flex;gap:10px
+}
+.ability{
+ width:82px;height:68px;border-radius:12px;
+ border:2px solid #666;background:#11111ddd;
+ display:flex;align-items:center;justify-content:center;
+ flex-direction:column
+}
+.key{font-size:21px;font-weight:bold;color:#d65cff}
+.cool{font-size:11px;color:#aaa}
+
+#pause{
+ pointer-events:auto;position:absolute;right:15px;top:75px;
+ padding:10px 18px;border:0;border-radius:8px;
+ background:#272737;color:white;cursor:pointer
+}
+
+.overlay{
+ display:none;position:fixed;inset:0;z-index:30;
+ background:#000b;align-items:center;justify-content:center;
+ flex-direction:column
+}
+.overlay h2{font-size:55px;text-shadow:0 0 25px #bb35ff}
+.overlay button{
+ padding:13px 30px;margin:5px;border:0;border-radius:10px;
+ cursor:pointer;font-size:18px
+}
+
+#combo{
+ position:absolute;left:30px;bottom:120px;
+ font-size:25px;font-weight:bold;color:#ffe45c;
+ text-shadow:0 0 12px #ff8a00
+}
+#message{
+ position:absolute;left:50%;top:42%;
+ transform:translate(-50%,-50%);
+ font-size:42px;font-weight:bold;
+ opacity:0;text-shadow:0 0 20px #fff;
+}
+</style>
+</head>
+
+<body>
+
+<div id="menu">
+<h1>CURSE BATTLEGROUNDS</h1>
+<p>Choose your Curse Host</p>
+<p id="levelText">Level 1</p>
+<div id="fighters"></div>
+<button id="start">⚔ START BATTLE</button>
+</div>
+
+<div id="hud">
+
+<div id="playerUI">
+<div>YOU</div>
+<div class="bar"><div id="hp" class="fill"></div></div>
+<div>CURSED ENERGY</div>
+<div class="bar"><div id="energy" class="fill"></div></div>
+</div>
+
+<div id="enemyUI">
+<div id="enemyName">ENEMY</div>
+<div class="bar"><div id="enemyHP" class="fill"></div></div>
+</div>
+
+<div id="combo"></div>
+<div id="message"></div>
+
+<button id="pause">⏸ PAUSE</button>
+
+<div id="abilities">
+<div class="ability"><span class="key">Q / 1</span><span>ABILITY</span><span id="c1" class="cool">READY</span></div>
+<div class="ability"><span class="key">E / 2</span><span>ABILITY</span><span id="c2" class="cool">READY</span></div>
+<div class="ability"><span class="key">R / 3</span><span>ABILITY</span><span id="c3" class="cool">READY</span></div>
+<div class="ability"><span class="key">F / 4</span><span>ULTIMATE</span><span id="c4" class="cool">0%</span></div>
+</div>
+</div>
+
+<div id="pauseOverlay" class="overlay">
+<h2>PAUSED</h2>
+<button id="resume">▶ RESUME</button>
+<button id="back">🏠 CHARACTER MENU</button>
+</div>
+
+<div id="levelOverlay" class="overlay">
+<h2 id="levelTitle">LEVEL COMPLETE!</h2>
+<button id="next">NEXT LEVEL</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script>
+////////////////////////////////////////////////////////////
+// DATA
+////////////////////////////////////////////////////////////
+
+const fighters=[
+["Mahito Host",0x813cff,0x111111,120,.17,12],
+["Jogo Host",0xff4918,0x301000,105,.15,15],
+["Hanami Host",0x299b49,0x062b16,150,.12,10],
+["Dagon Host",0x197dcc,0x092c55,145,.13,13],
+["Rika Host",0xd9d9e8,0x252530,180,.13,17],
+["Naoya Host",0x62eaff,0x183f70,110,.23,13],
+["Kurourushi Host",0x514126,0x21170b,125,.16,14],
+["Choso Host",0x9d172b,0x230b0d,135,.16,16],
+["Eso Host",0x74336e,0x281027,125,.15,14],
+["Kechizu Host",0x6b9638,0x1a2a0b,130,.13,15],
+["Smallpox Host",0x8f8f8f,0x202020,145,.11,16],
+["Kuchisake Host",0xf0b4bd,0x331522,120,.17,14],
+["Rainbow Dragon Host",0x44e0d2,0x151b2b,155,.14,16],
+["Finger Bearer Host",0x65401f,0x160e08,190,.10,20],
+["Tamamo Host",0xd887ff,0x30103f,135,.16,15],
+["Ganesha Host",0xe0aa63,0x32200d,150,.11,14],
+["Grasshopper Host",0x8bb83e,0x24320b,110,.21,12],
+["Inventory Host",0x606060,0x171717,140,.13,15],
+["Fly Host",0x56654b,0x1b2419,100,.25,10],
+["Yasohachi Host",0x8056c8,0x24133e,140,.15,15]
+];
+
+let selected=0;
+let level=1;
+let scene,camera,renderer,clock;
+let player=null;
+let enemies=[];
+let keys={};
+let paused=false;
+let running=false;
+
+let playerHP=100;
+let energy=0;
+let combo=0;
+let comboTimer=0;
+
+const cooldowns=[0,0,0];
+const maxCooldown=[2.5,4,6];
+
+////////////////////////////////////////////////////////////
+// MENU
+////////////////////////////////////////////////////////////
+
+const fighterBox=document.getElementById("fighters");
+
+fighters.forEach((f,i)=>{
+ const el=document.createElement("div");
+ el.className="fighter";
+ el.innerHTML=`<b>${f[0]}</b><br>❤️ ${f[3]}<br>⚡ Speed ${f[4].toFixed(2)}`;
+ el.onclick=()=>{
+   selected=i;
+   document.querySelectorAll(".fighter")
+   .forEach(x=>x.classList.remove("selected"));
+   el.classList.add("selected");
+ };
+ fighterBox.appendChild(el);
+});
+
+document.querySelector(".fighter").classList.add("selected");
+
+////////////////////////////////////////////////////////////
+// THREE SETUP
+////////////////////////////////////////////////////////////
+
+function startGame(){
+
+ document.getElementById("menu").style.display="none";
+ document.getElementById("hud").style.display="block";
+
+ if(!renderer){
+   scene=new THREE.Scene();
+   scene.background=new THREE.Color(0x07070e);
+   scene.fog=new THREE.Fog(0x07070e,70,180);
+
+   camera=new THREE.PerspectiveCamera(
+     60,innerWidth/innerHeight,.1,500
+   );
+
+   renderer=new THREE.WebGLRenderer({antialias:true});
+   renderer.setSize(innerWidth,innerHeight);
+   renderer.shadowMap.enabled=true;
+   document.body.appendChild(renderer.domElement);
+
+   clock=new THREE.Clock();
+
+   scene.add(new THREE.AmbientLight(0xffffff,.65));
+
+   const light=new THREE.DirectionalLight(0xffffff,1.3);
+   light.position.set(40,80,30);
+   light.castShadow=true;
+   scene.add(light);
+
+   buildMap();
+   animate();
+ }
+
+ resetBattle();
+ running=true;
+ paused=false;
+}
+
+document.getElementById("start").onclick=startGame;
+
+////////////////////////////////////////////////////////////
+// MAP
+////////////////////////////////////////////////////////////
+
+function buildMap(){
+
+ const ground=new THREE.Mesh(
+  new THREE.PlaneGeometry(180,180),
+  new THREE.MeshStandardMaterial({color:0x111118})
+ );
+ ground.rotation.x=-Math.PI/2;
+ ground.receiveShadow=true;
+ scene.add(ground);
+
+ const roadMat=new THREE.MeshStandardMaterial({color:0x202028});
+
+ const road1=new THREE.Mesh(
+  new THREE.BoxGeometry(180,.15,20),roadMat
+ );
+ road1.position.y=.05;
+ scene.add(road1);
+
+ const road2=new THREE.Mesh(
+  new THREE.BoxGeometry(20,.16,180),roadMat
+ );
+ road2.position.y=.06;
+ scene.add(road2);
+
+ // sidewalks
+ for(let x=-80;x<=80;x+=20){
+   for(let z=-80;z<=80;z+=20){
+
+     if(Math.abs(x)<25||Math.abs(z)<25)continue;
+
+     const h=8+Math.random()*25;
+
+     const b=new THREE.Mesh(
+       new THREE.BoxGeometry(12,h,12),
+       new THREE.MeshStandardMaterial({
+         color:0x181821
+       })
+     );
+
+     b.position.set(x,h/2,z);
+     b.castShadow=true;
+     scene.add(b);
+
+     for(let y=3;y<h;y+=4){
+
+       const w=new THREE.Mesh(
+        new THREE.BoxGeometry(6,.3,.1),
+        new THREE.MeshBasicMaterial({
+          color:Math.random()>.5?0xff2d92:0x35dfff
+        })
+       );
+
+       w.position.set(x,y,z-6.05);
+       scene.add(w);
+     }
+   }
+ }
+
+ // center monument
+ const tower=new THREE.Mesh(
+  new THREE.CylinderGeometry(4,6,25,12),
+  new THREE.MeshStandardMaterial({
+    color:0x412052,
+    emissive:0x28083d,
+    emissiveIntensity:1.5
+  })
+ );
+ tower.position.set(35,12.5,-35);
+ scene.add(tower);
+
+ // train line
+ const track=new THREE.Mesh(
+  new THREE.BoxGeometry(180,5,5),
+  new THREE.MeshStandardMaterial({color:0x242431})
+ );
+ track.position.set(0,12,-45);
+ scene.add(track);
+}
+
+////////////////////////////////////////////////////////////
+// CHARACTER MODEL
+////////////////////////////////////////////////////////////
+
+function makeCharacter(data,boss=false){
+
+ const g=new THREE.Group();
+
+ const color=data[1];
+ const hairColor=data[2];
+
+ const skin=new THREE.MeshStandardMaterial({color:0xe1a17e});
+ const cloth=new THREE.MeshStandardMaterial({color});
+ const dark=new THREE.MeshStandardMaterial({color:0x101015});
+ const hairMat=new THREE.MeshStandardMaterial({color:hairColor});
+
+ function box(w,h,d,mat){
+   return new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+ }
+
+ // pelvis
+ const pelvis=box(1.25,.7,.75,dark);
+ pelvis.position.y=1.65;
+ g.add(pelvis);
+
+ // torso
+ const torso=box(1.7,2,.9,cloth);
+ torso.position.y=2.7;
+ g.add(torso);
+
+ // neck
+ const neck=new THREE.Mesh(
+   new THREE.CylinderGeometry(.25,.25,.3,10),skin
+ );
+ neck.position.y=3.85;
+ g.add(neck);
+
+ // head
+ const head=new THREE.Mesh(
+   new THREE.SphereGeometry(.63,18,18),
+   skin
+ );
+ head.position.y=4.45;
+ g.add(head);
+
+ // hair
+ const hair=new THREE.Mesh(
+   new THREE.SphereGeometry(.67,18,18),
+   hairMat
+ );
+ hair.scale.y=.62;
+ hair.position.y=4.72;
+ g.add(hair);
+
+ // arms
+ const left=box(.48,1.8,.48,cloth);
+ const right=box(.48,1.8,.48,cloth);
+
+ left.position.set(-1.15,2.7,0);
+ right.position.set(1.15,2.7,0);
+
+ g.add(left,right);
+
+ // legs
+ const lLeg=box(.62,1.8,.62,dark);
+ const rLeg=box(.62,1.8,.62,dark);
+
+ lLeg.position.set(-.42,.75,0);
+ rLeg.position.set(.42,.75,0);
+
+ g.add(lLeg,rLeg);
+
+ // shoes
+ const lShoe=box(.7,.35,1,dark);
+ const rShoe=box(.7,.35,1,dark);
+
+ lShoe.position.set(-.42,.05,.18);
+ rShoe.position.set(.42,.05,.18);
+
+ g.add(lShoe,rShoe);
+
+ // eyes
+ const eyeMat=new THREE.MeshBasicMaterial({color:0xff2020});
+
+ for(const x of [-.22,.22]){
+   const eye=new THREE.Mesh(
+     new THREE.SphereGeometry(.08,8,8),
+     eyeMat
+   );
+   eye.position.set(x,4.5,-.59);
+   g.add(eye);
+ }
+
+ // aura
+ const aura=new THREE.Mesh(
+  new THREE.TorusGeometry(1.4,.045,8,32),
+  new THREE.MeshBasicMaterial({color})
+ );
+ aura.rotation.x=Math.PI/2;
+ aura.position.y=.15;
+ g.add(aura);
+
+ if(boss){
+   g.scale.setScalar(1.45);
+
+   const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(2.1,.1,8,32),
+    new THREE.MeshBasicMaterial({color:0xff2222})
+   );
+   ring.rotation.x=Math.PI/2;
+   ring.position.y=.1;
+   g.add(ring);
+ }
+
+ g.userData={
+   left,right,lLeg,rLeg,torso,head,
+   anim:"idle",
+   animTime:0,
+   hitFlash:0
+ };
+
+ g.traverse(o=>{
+   if(o.isMesh)o.castShadow=true;
+ });
+
+ return g;
+}
+
+////////////////////////////////////////////////////////////
+// RESET
+////////////////////////////////////////////////////////////
+
+function resetBattle(){
+
+ if(player)scene.remove(player);
+
+ enemies.forEach(e=>scene.remove(e.mesh));
+ enemies=[];
+
+ const data=fighters[selected];
+
+ player=makeCharacter(data);
+ player.position.set(0,0,0);
+ scene.add(player);
+
+ playerHP=data[3];
+ energy=0;
+ combo=0;
+
+ for(let i=0;i<3;i++)cooldowns[i]=0;
+
+ const count=Math.min(10,3+Math.floor(level/2));
+
+ for(let i=0;i<count;i++){
+
+   const f=fighters[
+     Math.floor(Math.random()*fighters.length)
+   ];
+
+   const boss=(level%5===0&&i===0);
+
+   const mesh=makeCharacter(f,boss);
+
+   mesh.position.set(
+     (Math.random()-.5)*65,
+     0,
+     (Math.random()-.5)*65
+   );
+
+   scene.add(mesh);
+
+   enemies.push({
+     mesh,
+     data:f,
+     hp:boss?f[3]*3:f[3],
+     max:boss?f[3]*3:f[3],
+     boss,
+     attack:0,
+     hit:0
+   });
+ }
+}
+
+////////////////////////////////////////////////////////////
+// ANIMATION SYSTEM
+////////////////////////////////////////////////////////////
+
+function setAnimation(model,name){
+
+ if(model.userData.anim!==name){
+   model.userData.anim=name;
+   model.userData.animTime=0;
+ }
+}
+
+function animateCharacter(model,dt){
+
+ const u=model.userData;
+ u.animTime+=dt;
+
+ const t=u.animTime;
+
+ const {left,right,lLeg,rLeg,torso,head}=u;
+
+ // reset
+ left.rotation.set(0,0,0);
+ right.rotation.set(0,0,0);
+ lLeg.rotation.set(0,0,0);
+ rLeg.rotation.set(0,0,0);
+ torso.rotation.set(0,0,0);
+ head.rotation.set(0,0,0);
+
+ if(u.anim==="idle"){
+
+   torso.position.y=2.7+Math.sin(t*3)*.025;
+   head.position.y=4.45+Math.sin(t*3)*.02;
+
+ }
+
+ else if(u.anim==="walk"){
+
+   const s=Math.sin(t*10);
+
+   left.rotation.x=s*.6;
+   right.rotation.x=-s*.6;
+
+   lLeg.rotation.x=-s*.5;
+   rLeg.rotation.x=s*.5;
+
+   torso.position.y=2.7+Math.abs(s)*.04;
+ }
+
+ else if(u.anim==="punch1"){
+
+   const p=Math.min(t/.22,1);
+
+   right.rotation.z=-Math.sin(p*Math.PI)*1.3;
+   right.rotation.x=-Math.sin(p*Math.PI)*.9;
+
+   torso.rotation.y=-Math.sin(p*Math.PI)*.25;
+   head.rotation.y=-Math.sin(p*Math.PI)*.12;
+
+ }
+
+ else if(u.anim==="punch2"){
+
+   const p=Math.min(t/.25,1);
+
+   left.rotation.z=Math.sin(p*Math.PI)*1.4;
+   left.rotation.x=-Math.sin(p*Math.PI)*.8;
+
+   torso.rotation.y=Math.sin(p*Math.PI)*.28;
+
+ }
+
+ else if(u.anim==="kick"){
+
+   const p=Math.min(t/.35,1);
+
+   rLeg.rotation.x=-Math.sin(p*Math.PI)*1.6;
+   torso.rotation.x=Math.sin(p*Math.PI)*.25;
+
+   left.rotation.x=-.25;
+   right.rotation.x=.3;
+ }
+
+ else if(u.anim==="hit"){
+
+   const p=Math.min(t/.3,1);
+
+   torso.rotation.x=-Math.sin(p*Math.PI)*.35;
+   head.rotation.x=-Math.sin(p*Math.PI)*.25;
+
+   left.rotation.z=.45;
+   right.rotation.z=-.45;
+ }
+
+ else if(u.anim==="ability"){
+
+   const p=Math.min(t/.55,1);
+
+   left.rotation.z=-Math.sin(p*Math.PI)*1.2;
+   right.rotation.z=Math.sin(p*Math.PI)*1.2;
+
+   torso.rotation.y=Math.sin(p*Math.PI)*.5;
+   torso.position.y=2.7+Math.sin(p*Math.PI)*.25;
+ }
+
+ else if(u.anim==="ultimate"){
+
+   const p=Math.min(t/1.1,1);
+
+   left.rotation.z=-Math.sin(p*Math.PI)*2;
+   right.rotation.z=Math.sin(p*Math.PI)*2;
+
+   torso.rotation.y=Math.sin(p*Math.PI)*1.3;
+   torso.position.y=2.7+Math.sin(p*Math.PI)*.6;
+
+ }
+
+ else if(u.anim==="dash"){
+
+   torso.rotation.x=-.45;
+
+   left.rotation.x=-.7;
+   right.rotation.x=-.7;
+
+   lLeg.rotation.x=.8;
+   rLeg.rotation.x=.8;
+ }
+
+}
+
+////////////////////////////////////////////////////////////
+// MOVEMENT
+////////////////////////////////////////////////////////////
+
+function movePlayer(dt){
+
+ let dx=0,dz=0;
+
+ if(keys.w)dz-=1;
+ if(keys.s)dz+=1;
+ if(keys.a)dx-=1;
+ if(keys.d)dx+=1;
+
+ if(dx||dz){
+
+   const len=Math.hypot(dx,dz);
+   dx/=len;dz/=len;
+
+   const speed=fighters[selected][4];
+
+   player.position.x+=dx*speed*60*dt;
+   player.position.z+=dz*speed*60*dt;
+
+   player.rotation.y=Math.atan2(dx,dz);
+
+   setAnimation(player,"walk");
+
+ }else if(
+   player.userData.anim==="walk"
+ ){
+   setAnimation(player,"idle");
+ }
+
+ player.position.x=THREE.MathUtils.clamp(
+   player.position.x,-75,75
+ );
+
+ player.position.z=THREE.MathUtils.clamp(
+   player.position.z,-75,75
+ );
+}
+
+////////////////////////////////////////////////////////////
+// TARGET
+////////////////////////////////////////////////////////////
+
+function nearestEnemy(max=30){
+
+ let best=null;
+ let bd=max;
+
+ for(const e of enemies){
+
+   if(e.hp<=0)continue;
+
+   const d=player.position.distanceTo(e.mesh.position);
+
+   if(d<bd){
+     bd=d;
+     best=e;
+   }
+ }
+
+ return best;
+}
+
+////////////////////////////////////////////////////////////
+// COMBAT
+////////////////////////////////////////////////////////////
+
+let attackState=0;
+let attackTimer=0;
+
+function basicAttack(){
+
+ if(attackTimer>0)return;
+
+ const target=nearestEnemy(6);
+
+ if(!target)return;
+
+ attackState++;
+
+ if(attackState>3)attackState=1;
+
+ attackTimer=.28;
+
+ if(attackState===1)setAnimation(player,"punch1");
+ if(attackState===2)setAnimation(player,"punch2");
+ if(attackState===3)setAnimation(player,"kick");
+
+ player.rotation.y=Math.atan2(
+   target.mesh.position.x-player.position.x,
+   target.mesh.position.z-player.position.z
+ );
+
+ const damage=fighters[selected][5]+
+   (attackState===3?8:0);
+
+ target.hp-=damage;
+ target.hit=.3;
+ setAnimation(target.mesh,"hit");
+
+ target.mesh.position.x+=(target.mesh.position.x-player.position.x)*.18;
+ target.mesh.position.z+=(target.mesh.position.z-player.position.z)*.18;
+
+ combo++;
+ comboTimer=1.2;
+
+ energy=Math.min(100,energy+7);
+
+ flashImpact(target);
+
+ if(target.hp<=0){
+   energy=Math.min(100,energy+12);
+ }
+}
+
+function flashImpact(enemy){
+
+ const ring=new THREE.Mesh(
+  new THREE.RingGeometry(.3,1.2,24),
+  new THREE.MeshBasicMaterial({
+    color:0xffffff,
+    transparent:true,
+    opacity:.9,
+    side:THREE.DoubleSide
+  })
+ );
+
+ ring.rotation.x=-Math.PI/2;
+ ring.position.copy(enemy.mesh.position);
+ ring.position.y=2;
+
+ scene.add(ring);
+
+ let t=0;
+
+ function fx(){
+
+   t+=.06;
+   ring.scale.setScalar(1+t*2);
+   ring.material.opacity=1-t;
+
+   if(t<1){
+     requestAnimationFrame(fx);
+   }else{
+     scene.remove(ring);
+   }
+ }
+
+ fx();
+}
+
+////////////////////////////////////////////////////////////
+// ABILITIES
+////////////////////////////////////////////////////////////
+
+function useAbility(i){
+
+ if(cooldowns[i]>0)return;
+
+ const target=nearestEnemy(18);
+
+ if(!target)return;
+
+ cooldowns[i]=maxCooldown[i];
+
+ setAnimation(player,"ability");
+
+ player.rotation.y=Math.atan2(
+   target.mesh.position.x-player.position.x,
+   target.mesh.position.z-player.position.z
+ );
+
+ const damages=[25,38,55];
+
+ target.hp-=damages[i];
+
+ target.hit=.5;
+
+ setAnimation(target.mesh,"hit");
+
+ energy=Math.min(
+   100,
+   energy+10
+ );
+
+ createBlast(
+   target.mesh.position,
+   fighters[selected][1],
+   i===0?3:i===1?5:7
+ );
+
+ if(target.hp<=0)
+   energy=Math.min(100,energy+15);
+}
+
+function ultimate(){
+
+ if(energy<100)return;
+
+ const target=nearestEnemy(30);
+
+ if(!target)return;
+
+ energy=0;
+
+ setAnimation(player,"ultimate");
+
+ createBlast(
+   player.position,
+   0xb52cff,
+   13
+ );
+
+ for(const e of enemies){
+
+   if(e.hp<=0)continue;
+
+   const d=player.position.distanceTo(e.mesh.position);
+
+   if(d<18){
+
+     e.hp-=fighters[selected][5]*4;
+     e.hit=.7;
+     setAnimation(e.mesh,"hit");
+   }
+ }
+}
+
+function createBlast(pos,color,size){
+
+ const sphere=new THREE.Mesh(
+  new THREE.SphereGeometry(.5,20,20),
+  new THREE.MeshBasicMaterial({
+    color,
+    transparent:true,
+    opacity:.75
+  })
+ );
+
+ sphere.position.copy(pos);
+ sphere.position.y+=2;
+
+ scene.add(sphere);
+
+ let t=0;
+
+ function grow(){
+
+   t+=.04;
+
+   sphere.scale.setScalar(
+     1+t*size
+   );
+
+   sphere.material.opacity=.75*(1-t);
+
+   if(t<1)
+     requestAnimationFrame(grow);
+   else
+     scene.remove(sphere);
+ }
+
+ grow();
+}
+
+////////////////////////////////////////////////////////////
+// ENEMY AI
+////////////////////////////////////////////////////////////
+
+function updateEnemies(dt){
+
+ for(const e of enemies){
+
+   if(e.hp<=0)continue;
+
+   e.attack-=dt;
+   e.hit-=dt;
+
+   if(e.hit>0)continue;
+
+   const dx=player.position.x-e.mesh.position.x;
+   const dz=player.position.z-e.mesh.position.z;
+
+   const dist=Math.hypot(dx,dz);
+
+   if(dist>4){
+
+     const speed=e.data[4]*35;
+
+     e.mesh.position.x+=(dx/dist)*speed*dt;
+     e.mesh.position.z+=(dz/dist)*speed*dt;
+
+     e.mesh.rotation.y=Math.atan2(dx,dz);
+
+     setAnimation(e.mesh,"walk");
+
+   }else{
+
+     setAnimation(e.mesh,"idle");
+
+     if(e.attack<=0){
+
+       e.attack=1;
+
+       playerHP-=e.data[5]*.35;
+
+       playerHP=Math.max(0,playerHP);
+
+       setAnimation(player,"hit");
+     }
+   }
+ }
+}
+
+////////////////////////////////////////////////////////////
+// CAMERA
+////////////////////////////////////////////////////////////
+
+function updateCamera(){
+
+ if(!player)return;
+
+ let spread=22;
+
+ for(const e of enemies){
+
+   if(e.hp<=0)continue;
+
+   spread=Math.max(
+     spread,
+     player.position.distanceTo(e.mesh.position)
+   );
+ }
+
+ const distance=THREE.MathUtils.clamp(
+   spread*.82,
+   28,
+   72
+ );
+
+ const height=distance*.55;
+
+ const target=player.position.clone();
+ target.y=2;
+
+ const desired=target.clone();
+
+ desired.x-=distance*.72;
+ desired.z+=distance*.82;
+ desired.y+=height;
+
+ camera.position.lerp(desired,.075);
+ camera.lookAt(target);
+}
+
+////////////////////////////////////////////////////////////
+// HUD
+////////////////////////////////////////////////////////////
+
+function updateHUD(){
+
+ document.getElementById("hp").style.width=
+   playerHP+"%";
+
+ document.getElementById("energy").style.width=
+   energy+"%";
+
+ const alive=enemies.filter(e=>e.hp>0);
+
+ if(alive.length){
+
+   const target=nearestEnemy(1000);
+
+   if(target){
+
+     document.getElementById("enemyName").textContent=
+       target.boss?"👑 BOSS":"ENEMY";
+
+     document.getElementById("enemyHP").style.width=
+       (target.hp/target.max*100)+"%";
+   }
+
+ }else{
+   document.getElementById("enemyHP").style.width="0%";
+ }
+
+ document.getElementById("combo").textContent=
+   combo>1?`${combo} HIT COMBO!`:"";
+
+ for(let i=0;i<3;i++){
+
+   document.getElementById("c"+(i+1)).textContent=
+     cooldowns[i]>0
+     ?cooldowns[i].toFixed(1)+"s"
+     :"READY";
+ }
+
+ document.getElementById("c4").textContent=
+   Math.floor(energy)+"%";
+}
+
+////////////////////////////////////////////////////////////
+// CAMERA SHAKE
+////////////////////////////////////////////////////////////
+
+let shake=0;
+
+////////////////////////////////////////////////////////////
+// GAME LOOP
+////////////////////////////////////////////////////////////
+
+function animate(){
+
+ requestAnimationFrame(animate);
+
+ const dt=Math.min(clock.getDelta(),.05);
+
+ if(running&&!paused){
+
+   attackTimer=Math.max(0,attackTimer-dt);
+
+   for(let i=0;i<3;i++)
+     cooldowns[i]=Math.max(
+       0,
+       cooldowns[i]-dt
+     );
+
+   comboTimer-=dt;
+
+   if(comboTimer<=0)
+     combo=0;
+
+   movePlayer(dt);
+   updateEnemies(dt);
+
+   animateCharacter(player,dt);
+
+   for(const e of enemies)
+     animateCharacter(e.mesh,dt);
+
+   updateCamera();
+   updateHUD();
+
+   const alive=enemies.some(e=>e.hp>0);
+
+   if(!alive){
+     running=false;
+     paused=true;
+
+     level++;
+
+     document.getElementById("levelTitle").textContent=
+       `LEVEL ${level-1} COMPLETE!`;
+
+     document.getElementById("levelOverlay").style.display="flex";
+   }
+
+   if(playerHP<=0){
+     running=false;
+     paused=true;
+
+     document.getElementById("levelTitle").textContent=
+       "DEFEATED!";
+
+     document.getElementById("next").textContent=
+       "RESTART";
+
+     document.getElementById("levelOverlay").style.display="flex";
+   }
+ }
+
+ renderer.render(scene,camera);
+}
+
+////////////////////////////////////////////////////////////
+// INPUT
+////////////////////////////////////////////////////////////
+
+window.addEventListener("keydown",e=>{
+
+ keys[e.key.toLowerCase()]=true;
+
+ if(e.key==="Escape"){
+   togglePause();
+   return;
+ }
+
+ if(paused)return;
+
+ if(e.key===" "){
+   e.preventDefault();
+   basicAttack();
+ }
+
+ if(e.key.toLowerCase()==="q"||e.key==="1")
+   useAbility(0);
+
+ if(e.key.toLowerCase()==="e"||e.key==="2")
+   useAbility(1);
+
+ if(e.key.toLowerCase()==="r"||e.key==="3")
+   useAbility(2);
+
+ if(e.key.toLowerCase()==="f"||e.key==="4")
+   ultimate();
+
+ if(e.key==="Shift"){
+   setAnimation(player,"dash");
+ }
+});
+
+window.addEventListener("keyup",e=>{
+ keys[e.key.toLowerCase()]=false;
+});
+
+////////////////////////////////////////////////////////////
+// PAUSE
+////////////////////////////////////////////////////////////
+
+function togglePause(){
+
+ if(!running&&
+    document.getElementById("levelOverlay").style.display==="flex")
+   return;
+
+ paused=!paused;
+
+ document.getElementById("pauseOverlay").style.display=
+   paused?"flex":"none";
+}
+
+document.getElementById("pause").onclick=togglePause;
+
+document.getElementById("resume").onclick=togglePause;
+
+document.getElementById("back").onclick=()=>{
+ location.reload();
+};
+
+////////////////////////////////////////////////////////////
+// NEXT LEVEL / RESTART
+////////////////////////////////////////////////////////////
+
+document.getElementById("next").onclick=()=>{
+
+ document.getElementById("levelOverlay").style.display="none";
+
+ playerHP=100;
+ energy=0;
+
+ resetBattle();
+
+ paused=false;
+ running=true;
+
+ document.getElementById("next").textContent="NEXT LEVEL";
+};
+
+////////////////////////////////////////////////////////////
+// RESIZE
+////////////////////////////////////////////////////////////
+
+window.addEventListener("resize",()=>{
+
+ if(!camera)return;
+
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+
+ renderer.setSize(
+   innerWidth,
+   innerHeight
+ );
+});
+
+</script>
+</body>
+</html>
